@@ -32,6 +32,7 @@ ENV ORACLE_HOME=/u01/oracle \
     USER_MEM_ARGS="-Djava.security.egd=file:/dev/./urandom" \
     DOMAIN_NAME="${DOMAIN_NAME:-InfraDomain}" \
     DOMAIN_HOME=/u01/oracle/user_projects/domains/${DOMAIN_NAME:-InfraDomain} \
+    VOLUME_DIR=/u01/oracle/user_projects \
     PATH=$PATH:/usr/java/default/bin:/u01/oracle/oracle_common/common/bin:/u01/oracle/wlserver/common/bin:/u01/oracle/container-scripts
 
 
@@ -50,7 +51,6 @@ COPY container-scripts/* /u01/oracle/container-scripts/
 
 # Environment variables required for this build (do NOT change)
 # -------------------------------------------------------------
-#Temporary until we have the zip installer
 ENV FMW_PKG=fmw_12.2.1.3.0_infrastructure_Disk1_1of1.zip \
     FMW_JAR=fmw_12.2.1.3.0_infrastructure.jar
 
@@ -60,15 +60,21 @@ COPY $FMW_PKG install.file oraInst.loc /u01/
 RUN chown oracle:oracle -R /u01 && \
     chmod +xr $SCRIPT_FILE && \
     yum install -y libaio && \
-    yum clean all 
+    rm -rf /var/cache/yum && \
+    mkdir -p $VOLUME_DIR && \
+    chown -R oracle:oracle $VOLUME_DIR
+
+VOLUME  $VOLUME_DIR
+    
 
 # Install 
 # ------------------------------------------------------------
 USER oracle
 RUN cd /u01 && $JAVA_HOME/bin/jar xf /u01/$FMW_PKG && cd - && \
+    $JAVA_HOME/bin/java -jar /u01/$FMW_JAR -silent -responseFile /u01/install.file -invPtrLoc /u01/oraInst.loc -jreLoc $JAVA_HOME -ignoreSysPrereqs -force -novalidation ORACLE_HOME=$ORACLE_HOME INSTALL_TYPE="WebLogic Server" && \
     rm /u01/$FMW_JAR /u01/$FMW_PKG /u01/oraInst.loc /u01/install.file
 
 WORKDIR ${ORACLE_HOME}
 
 # Define default command to start script.
-CMD ["/u01/oracle/container-scripts/createInfraDomainAndStartAdmin.sh"]
+CMD ["/u01/oracle/container-scripts/createOrStartInfraDomain.sh"]
